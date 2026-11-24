@@ -1,0 +1,266 @@
+
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#10243e">
+<title>Deutsch Trainer</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#f2f5fa;color:#18283d;
+ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+header{
+ background:#10243e;color:white;padding:24px 18px;
+ text-align:center;
+}
+header h1{margin:0;font-size:27px}
+header p{margin:8px 0 0;color:#d5e4f5}
+main{max-width:760px;margin:auto;padding:16px}
+.card{
+ background:white;padding:18px;border-radius:16px;
+ margin-bottom:16px;box-shadow:0 3px 12px #152c4810;
+}
+h2{font-size:19px;margin:0 0 15px}
+input,textarea,button{
+ width:100%;padding:12px;margin:6px 0;
+ border-radius:9px;font-size:16px;
+}
+input,textarea{border:1px solid #d6deea}
+textarea{min-height:75px;resize:vertical}
+button{
+ border:0;background:#1767c2;color:white;
+ font-weight:600;cursor:pointer;
+}
+button.secondary{background:#e7eef8;color:#17416d}
+button.danger{background:#b83232}
+button:active{opacity:.8}
+.word{
+ border:1px solid #e1e7ef;padding:13px;
+ border-radius:12px;margin:10px 0;
+}
+.word h3{margin:0 0 6px}
+.small{color:#64748b;font-size:14px}
+.actions{display:flex;gap:7px}
+.actions button{flex:1}
+#flash{font-size:23px;font-weight:700;text-align:center;padding:20px}
+#quizQuestion{font-size:21px;font-weight:700}
+</style>
+</head>
+<body>
+
+<header>
+<h1>🇩🇪 Deutsch Trainer</h1>
+<p>Μάθε Γερμανικά με ελληνικά και Zürichdeutsch 🇨🇭</p>
+</header>
+
+<main>
+
+<section class="card">
+<h2>➕ Προσθήκη λέξης</h2>
+<input id="german" placeholder="Γερμανική λέξη (π.χ. arbeiten)">
+<input id="greek" placeholder="Ελληνική μετάφραση">
+<input id="swiss" placeholder="Zürichdeutsch">
+<textarea id="examples" placeholder="3 γερμανικές προτάσεις, μία σε κάθε γραμμή"></textarea>
+<textarea id="translations" placeholder="Ελληνικές μεταφράσεις, μία σε κάθε γραμμή"></textarea>
+<button onclick="addWord()">Αποθήκευση λέξης</button>
+<p class="small">Η αυτόματη συμπλήρωση με AI θα προστεθεί σε επόμενο βήμα.</p>
+</section>
+
+<section class="card">
+<h2>🗂️ Οι λέξεις μου</h2>
+<input id="search" placeholder="Αναζήτηση λέξης..." oninput="render()">
+<div id="words"></div>
+</section>
+
+<section class="card">
+<h2>🃏 Flashcards</h2>
+<div id="flash">Πάτησε «Νέα κάρτα»</div>
+<button onclick="nextCard()">Νέα κάρτα</button>
+<button class="secondary" onclick="reveal()">Εμφάνιση απάντησης</button>
+</section>
+
+<section class="card">
+<h2>🧠 Κουίζ</h2>
+<div id="quizQuestion">Πάτησε «Νέο κουίζ»</div>
+<input id="answer" placeholder="Γράψε τη γερμανική λέξη">
+<button onclick="newQuiz()">Νέο κουίζ</button>
+<button class="secondary" onclick="checkAnswer()">Έλεγχος απάντησης</button>
+<p id="result"></p>
+</section>
+
+<section class="card">
+<h2>📁 Αντίγραφο ασφαλείας CSV</h2>
+<button onclick="exportCSV()">Εξαγωγή CSV</button>
+<input type="file" id="csvFile" accept=".csv,text/csv">
+<button class="secondary" onclick="importCSV()">Εισαγωγή CSV</button>
+</section>
+
+</main>
+
+<script>
+let words=JSON.parse(localStorage.getItem("deutschWords")||"[]");
+let current=null;
+let quiz=null;
+
+function save(){
+ localStorage.setItem("deutschWords",JSON.stringify(words));
+ render();
+}
+
+function addWord(){
+ const german=document.getElementById("german").value.trim();
+ const greek=document.getElementById("greek").value.trim();
+ const swiss=document.getElementById("swiss").value.trim();
+ const examples=document.getElementById("examples").value.split("\n").map(x=>x.trim()).filter(Boolean);
+ const translations=document.getElementById("translations").value.split("\n").map(x=>x.trim()).filter(Boolean);
+
+ if(!german||!greek){
+  alert("Συμπλήρωσε τη γερμανική λέξη και την ελληνική μετάφραση.");
+  return;
+ }
+
+ words.push({german,greek,swiss,examples,translations});
+ save();
+
+ ["german","greek","swiss","examples","translations"].forEach(id=>{
+  document.getElementById(id).value="";
+ });
+}
+
+function escapeHTML(value){
+ return String(value).replace(/[&<>"']/g,c=>({
+ "&":"&amp;","<":"&lt;",">":"&gt;",
+ '"':"&quot;","'":"&#39;"
+ })[c]);
+}
+
+function render(){
+ const q=document.getElementById("search").value.toLowerCase();
+ const container=document.getElementById("words");
+ container.innerHTML="";
+
+ words.forEach((w,i)=>{
+  if(![w.german,w.greek,w.swiss].join(" ").toLowerCase().includes(q))return;
+
+  const div=document.createElement("div");
+  div.className="word";
+  const examples=(w.examples||[]).map((e,j)=>
+   `<p>• ${escapeHTML(e)}<br><span class="small">${escapeHTML((w.translations||[])[j]||"")}</span></p>`
+  ).join("");
+
+  div.innerHTML=`
+   <h3>${escapeHTML(w.german)}</h3>
+   <p>🇬🇷 ${escapeHTML(w.greek)}</p>
+   <p>🇨🇭 ${escapeHTML(w.swiss||"Δεν έχει συμπληρωθεί")}</p>
+   ${examples}
+   <div class="actions">
+    <button onclick="speak(${i})">🔊 Άκου</button>
+    <button class="danger" onclick="deleteWord(${i})">Διαγραφή</button>
+   </div>`;
+  container.appendChild(div);
+ });
+}
+
+function deleteWord(i){
+ if(confirm("Να διαγραφεί αυτή η λέξη;")){
+  words.splice(i,1);
+  save();
+ }
+}
+
+function speak(i){
+ const utterance=new SpeechSynthesisUtterance(words[i].german);
+ utterance.lang="de-DE";
+ speechSynthesis.speak(utterance);
+}
+
+function nextCard(){
+ if(!words.length){alert("Πρόσθεσε πρώτα λέξεις.");return;}
+ current=Math.floor(Math.random()*words.length);
+ document.getElementById("flash").textContent=words[current].greek;
+}
+
+function reveal(){
+ if(current===null)return;
+ const w=words[current];
+ document.getElementById("flash").textContent=
+  w.german+" — "+w.swiss;
+}
+
+function newQuiz(){
+ if(!words.length){alert("Πρόσθεσε πρώτα λέξεις.");return;}
+ quiz=words[Math.floor(Math.random()*words.length)];
+ document.getElementById("quizQuestion").textContent=
+  "Πώς λέγεται στα Γερμανικά: "+quiz.greek+";";
+ document.getElementById("answer").value="";
+ document.getElementById("result").textContent="";
+}
+
+function checkAnswer(){
+ if(!quiz){alert("Ξεκίνα πρώτα ένα κουίζ.");return;}
+ const answer=document.getElementById("answer").value.trim().toLowerCase();
+ document.getElementById("result").textContent=
+  answer===quiz.german.toLowerCase()
+  ?"✅ Σωστά! Μπράβο!"
+  :"❌ Η σωστή απάντηση είναι: "+quiz.german;
+}
+
+function exportCSV(){
+ const rows=[["German","Greek","Swiss","Examples","Translations"]];
+ words.forEach(w=>rows.push([
+  w.german,w.greek,w.swiss,
+  (w.examples||[]).join(" | "),
+  (w.translations||[]).join(" | ")
+ ]));
+ const csv=rows.map(row=>row.map(v=>
+  '"'+String(v??"").replace(/"/g,'""')+'"'
+ ).join(",")).join("\n");
+
+ const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement("a");
+ a.href=url;a.download="deutsch-trainer.csv";a.click();
+ URL.revokeObjectURL(url);
+}
+
+function importCSV(){
+ const file=document.getElementById("csvFile").files[0];
+ if(!file){alert("Επίλεξε πρώτα ένα CSV.");return;}
+ const reader=new FileReader();
+ reader.onload=()=>{
+  const lines=reader.result.replace(/^\uFEFF/,"").split(/\r?\n/);
+  const parseLine=line=>{
+   const result=[];
+   let value="",quoted=false;
+   for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'&&line[i+1]==='"'&&quoted){value+='"';i++;}
+    else if(c==='"')quoted=!quoted;
+    else if(c===","&&!quoted){result.push(value);value="";}
+    else value+=c;
+   }
+   result.push(value);return result;
+  };
+  lines.slice(1).filter(Boolean).forEach(line=>{
+   const r=parseLine(line);
+   if(r[0]&&r[1]){
+    words.push({
+     german:r[0],greek:r[1],swiss:r[2]||"",
+     examples:(r[3]||"").split(" | "),
+     translations:(r[4]||"").split(" | ")
+    });
+   }
+  });
+  save();
+  alert("Η εισαγωγή ολοκληρώθηκε.");
+ };
+ reader.readAsText(file,"UTF-8");
+}
+
+render();
+</script>
+</body>
+</html>
